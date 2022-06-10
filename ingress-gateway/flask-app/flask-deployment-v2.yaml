@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flask-deployment-v2
+  labels:
+    app: flask
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flask
+  template:
+    metadata:
+      labels:
+        app: flask
+        version: v2
+    spec:
+      containers:
+      - name: flask-server
+        image: dustise/flaskapp
+        env:
+        - name: version
+          value: v2

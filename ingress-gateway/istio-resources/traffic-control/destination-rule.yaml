@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: flask-rule
+spec:
+  host: flask-service
+  trafficPolicy:
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 20s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  subsets:
+    - name: production
+      labels:
+        version: "v1"
+    - name: canary
+      labels:
+        version: "v2"

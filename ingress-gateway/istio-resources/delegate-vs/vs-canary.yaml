@@ -1,0 +1,34 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: flask-vs
+spec:
+  # hosts must be empty for a delegated virtual service
+  # https://istio.io/latest/docs/reference/config/networking/virtual-service/
+  # hosts:
+  # - "flask-service"
+  http:
+    - match:
+        - headers:
+            canary:
+              exact: 'true'
+      route:
+        - destination:
+            host: flask-service
+            subset: canary
+            port:
+              number: 80
+          weight: 100
+    - route:
+        - destination:
+            host: flask-service
+            subset: production
+            port:
+              number: 80
+          weight: 100
+        - destination:
+            host: flask-service
+            subset: canary
+            port:
+              number: 80
+          weight: 0

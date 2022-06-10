@@ -1,0 +1,39 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: demo-vs
+spec:
+  hosts:
+  - 'localhost'
+  - '127.0.0.1'
+  gateways:
+  - demo-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /flask/
+    rewrite:
+      uri: "/"
+    route:
+    - destination:
+        port:
+          number: 80
+        host: flask-service
+        subset: production
+        weight: 50
+    - destination:
+        host: flask-service
+        subset: canary
+        port:
+          number: 80
+        weight: 50
+  - match:
+    - uri:
+        prefix: /echo/
+    rewrite:
+      uri: "/"
+    route:
+    - destination:
+        port:
+          number: 80
+        host: echo-service

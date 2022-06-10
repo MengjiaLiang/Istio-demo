@@ -1,0 +1,32 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: demo-ingress
+spec:
+  hosts:
+  - 'localhost'
+  - '127.0.0.1'
+  gateways:
+  - demo-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /flask/
+    rewrite:
+      uri: "/"
+    delegate:
+        name: flask-vs
+  - match:
+    - uri:
+        prefix: /echo/
+    rewrite:
+      uri: "/"
+    headers:
+      request:
+        add:
+          X-UiPath-Internal-Hostname: "test-host"
+    route:
+    - destination:
+        host: echo-service
+        port:
+          number: 80
