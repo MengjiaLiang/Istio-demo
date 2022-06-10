@@ -86,7 +86,7 @@ kubectl apply -f echo-app/echo-service.yaml
 # We will deploy two versions of the flask app deployments, in order to demo the traffic control in the later.
 kubectl apply -f flask-app/flask-deployment-v1.yaml
 kubectl apply -f flask-app/flask-deployment-v2.yaml
-kubectl apply -f flask-app/service.yaml
+kubectl apply -f flask-app/flask-service.yaml
 ```
 
 Make sure all the pods from these application are all running first, then we can verify if the services and deployments are working well.
@@ -99,8 +99,11 @@ kubectl exec -it test-pod -- /bin/bash
 # inside the test-pod
 # the 1st curl command should return the value of environment variable `version` we set in the deployment spec
 # the 2nd curl command should dump out the request details.
-curl http://flask-service.default.svc.cluster.local/env/version
-curl http://echo-service.default.svc.cluster.local
+$ curl http://flask-service.default.svc.cluster.local/env/version
+v1
+
+$ curl http://echo-service.default.svc.cluster.local
+{"host":{"hostname":"echo-service.default.svc.cluster.local","ip":"::ffff:127.0.0.6","ips":[]},"http":{"method":"GET","baseUrl":"","originalUrl":"/","protocol":"http"},"request":{"params":{"0":"/"},"query":{},"cookies":{},"body":{},"headers":{"host":"echo-service.default.svc.cluster.local","user-agent":"curl/7.82.0","accept":"*/*","x-forwarded-proto":"http","x-request-id":"84fc4172-5cf5-4c32-9a44-25bc6af5fa02","x-envoy-attempt-count":"1","x-forwarded-client-cert":"By=spiffe://cluster.local/ns/default/sa/default;Hash=3f21fd3abb9bcccbf0c34bd1767941de33a8b19cfa31e85611724c8b75932e06;Subject=\"\";URI=spiffe://cluster.local/ns/default/sa/default","x-b3-traceid":"dfb248c38b4fb2e2b0dfa041783aaafc","x-b3-spanid":"2e571c2c1b66b0bc","x-b3-parentspanid":"b0dfa041783aaafc","x-b3-sampled":"0"}},"environment":{"PATH":"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin","HOSTNAME":"echo-deployment-6b7ddbcb47-qffcn","version":"v1","ECHO_SERVICE_SERVICE_PORT_HTTP":"80","ECHO_SERVICE_PORT_80_TCP_PORT":"80","KUBERNETES_PORT_443_TCP":"tcp://10.96.0.1:443","KUBERNETES_PORT_443_TCP_PROTO":"tcp","KUBERNETES_PORT_443_TCP_PORT":"443","ECHO_SERVICE_SERVICE_HOST":"10.96.118.49","ECHO_SERVICE_PORT":"tcp://10.96.118.49:80","ECHO_SERVICE_PORT_80_TCP_ADDR":"10.96.118.49","KUBERNETES_SERVICE_PORT":"443","KUBERNETES_PORT":"tcp://10.96.0.1:443","KUBERNETES_PORT_443_TCP_ADDR":"10.96.0.1","ECHO_SERVICE_SERVICE_PORT":"80","ECHO_SERVICE_PORT_80_TCP":"tcp://10.96.118.49:80","ECHO_SERVICE_PORT_80_TCP_PROTO":"tcp","KUBERNETES_SERVICE_HOST":"10.96.0.1","KUBERNETES_SERVICE_PORT_HTTPS":"443","NODE_VERSION":"16.15.0","YARN_VERSION":"1.22.18","HOME":"/root"}}
 ```
 You can exit this session now.
 
@@ -120,7 +123,7 @@ In order to achieve the full functionalities of routing an outside request to th
 - VirtualService
 
 ```
-# this will create a gateway that adapt the traffic into the cluster for the requests whose hosts are localhost or 127.0.0.1
+# this will create a gateway that adapt the traffic into the cluster for the requests whose host is 127.0.0.1
 kubectl apply -f istio-resources/ingress-gateway/gateway.yaml
 
 # this will create a virtualservice that routes the request to the services should serve them.
@@ -173,13 +176,104 @@ This section shows how to expose a secure HTTPS service using simple tls.
 
 1. Create a root certificate and private key to sign the certificates for the services:
 ```
-openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=example Inc./CN=example.com' -keyout example.com.key -out example.com.crt
+mkdir certs
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -subj '/O=example Inc./CN=example.com' -keyout certs/example.com.key -out certs/example.com.crt
 ```
 
 2. Create a certificate and a private key for demo.example.com:
 ```
-openssl req -out demo.example.com.csr -newkey rsa:2048 -nodes -keyout demo.example.com.key -subj "/CN=demo.example.com/O=demo organization"
-openssl x509 -req -sha256 -days 365 -CA example.com.crt -CAkey example.com.key -set_serial 0 -in demo.example.com.csr -out demo.example.com.crt
+openssl req -out certs/demo.example.com.csr -newkey rsa:2048 -nodes -keyout certs/demo.example.com.key -subj "/CN=demo.example.com/O=demo organization"
+openssl x509 -req -sha256 -days 365 -CA certs/example.com.crt -CAkey certs/example.com.key -set_serial 0 -in certs/demo.example.com.csr -out certs/demo.example.com.crt
 ```
 
 3. Configure a TLS ingress gateway for a single host
+```
+# Create a secret for the ingress gateway
+# Note: the namespace must be istio-system
+kubectl create -n istio-system secret tls demo-credential --key=certs/demo.example.com.key --cert=certs/demo.example.com.crt
+
+kubectl apply -f istio-resources/tls/gateway.yaml
+```
+
+Testing the new configuration with
+```
+curl -v -HHost:demo.example.com --resolve "demo.example.com:443:127.0.0.1" \
+--cacert certs/example.com.crt "https://demo.example.com:443/flask/env/version"
+```
+The version value should return at last.
+
+And if you not attach the ca cert
+```
+curl -v -HHost:demo.example.com --resolve "demo.example.com:443:127.0.0.1" "https://demo.example.com:443/flask/env/version"
+```
+you should see
+```
+* Added demo.example.com:443:127.0.0.1 to DNS cache
+* Hostname demo.example.com was found in DNS cache
+*   Trying 127.0.0.1:443...
+* TCP_NODELAY set
+* Connected to demo.example.com (127.0.0.1) port 443 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*   CAfile: /etc/ssl/certs/ca-certificates.crt
+  CApath: /etc/ssl/certs
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+* TLSv1.3 (OUT), TLS alert, unknown CA (560):
+* SSL certificate problem: unable to get local issuer certificate
+* Closing connection 0
+curl: (60) SSL certificate problem: unable to get local issuer certificate
+More details here: https://curl.haxx.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+```
+
+## Demo the mTLS
+
+1. Create a self-signed certificate
+```
+openssl req -x509 -newkey rsa:4096 -keyout certs/key.pem -out certs/cert.pem -sha256 -days 365 -nodes -subj '/CN=example.com'
+```
+
+2. Create the secret to store this cert.
+```
+# the name must be `<secret>-cacert`. Since we create the previous secret as `demo-credential`, we will create this secrete as `demo-credential-cacert`
+kubectl create -n istio-system secret generic demo-credential-cacert --from-file=ca.crt=certs/cert.pem
+```
+
+3. Update the gateway resource
+```
+kubectl apply -f istio-resources/tls/gateway.yaml
+```
+
+4. Verify the client request will fail due to it doesn't present the certificate
+```
+curl -v -HHost:demo.example.com --resolve "demo.example.com:443:127.0.0.1" \
+--cacert certs/example.com.crt "https://demo.example.com:443/flask/env/version"
+```
+The command should contains
+```
+curl: (56) OpenSSL SSL_read: error:1409445C:SSL routines:ssl3_read_bytes:tlsv13 alert certificate required, errno 0
+```
+at the end.
+
+5. Verify the client request will succeed after presenting the certificate
+```
+curl -v -HHost:demo.example.com --resolve "demo.example.com:443:127.0.0.1" \
+--cacert certs/example.com.crt --cert certs/cert.pem --key certs/key.pem "https://demo.example.com:443/flask/env/version"
+```
+It should return the version number now
+
+# Teardown the resources
+```
+# Local files
+rm -rf certs
+
+# delete minikube cluster
+minikube delete --all
+```

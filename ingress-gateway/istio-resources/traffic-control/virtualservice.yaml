@@ -4,7 +4,6 @@ metadata:
   name: demo-vs
 spec:
   hosts:
-  - 'localhost'
   - '127.0.0.1'
   gateways:
   - demo-gateway
@@ -20,13 +19,13 @@ spec:
           number: 80
         host: flask-service
         subset: production
-        weight: 50
+      weight: 50
     - destination:
         host: flask-service
         subset: canary
         port:
           number: 80
-        weight: 50
+      weight: 50
   - match:
     - uri:
         prefix: /echo/

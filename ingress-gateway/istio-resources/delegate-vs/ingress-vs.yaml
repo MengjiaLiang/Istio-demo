@@ -4,7 +4,6 @@ metadata:
   name: demo-ingress
 spec:
   hosts:
-  - 'localhost'
   - '127.0.0.1'
   gateways:
   - demo-gateway

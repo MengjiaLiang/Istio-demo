@@ -1,12 +1,12 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: VirtualService
 metadata:
-  name: demo-vs
+  name: tls-vs
 spec:
   hosts:
-  - '127.0.0.1'
+  - "demo.example.com"
   gateways:
-  - demo-gateway
+  - tls-gateway
   http:
   - match:
     - uri:
@@ -18,6 +18,14 @@ spec:
         port:
           number: 80
         host: flask-service
+        subset: production
+      weight: 50
+    - destination:
+        host: flask-service
+        subset: canary
+        port:
+          number: 80
+      weight: 50
   - match:
     - uri:
         prefix: /echo/
