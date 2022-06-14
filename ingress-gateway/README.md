@@ -193,6 +193,7 @@ openssl x509 -req -sha256 -days 365 -CA certs/example.com.crt -CAkey certs/examp
 kubectl create -n istio-system secret tls demo-credential --key=certs/demo.example.com.key --cert=certs/demo.example.com.crt
 
 kubectl apply -f istio-resources/tls/gateway.yaml
+kubectl apply -f istio-resources/tls/vs.yaml
 ```
 
 Testing the new configuration with
@@ -248,7 +249,7 @@ kubectl create -n istio-system secret generic demo-credential-cacert --from-file
 
 3. Update the gateway resource
 ```
-kubectl apply -f istio-resources/tls/gateway.yaml
+kubectl apply -f istio-resources/mtls/gateway.yaml
 ```
 
 4. Verify the client request will fail due to it doesn't present the certificate
