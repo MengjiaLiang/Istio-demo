@@ -15,7 +15,10 @@ wget https://github.com/tinygo-org/tinygo/releases/download/v0.23.0/tinygo_0.23.
 sudo dpkg -i tinygo_0.23.0_amd64.deb
 export PATH=$PATH:/usr/local/bin
 
-
+# 3. Install Istioctl v1.10
+curl -LO https://storage.googleapis.com/gke-release/asm/istio-1.10.2-asm.2-linux-amd64.tar.gz
+tar xvf istio-1.10.2-asm.2-linux-amd64.tar.gz
+mv istio-1.10.2-asm.2/bin/istioctl /usr/local/bin
 
 ```
 
@@ -23,18 +26,18 @@ export PATH=$PATH:/usr/local/bin
 ## Testing Environment Setup
 ```
 # 1. Setpup the minikube cluster
-minikbe start
+minikube start
 
-# 2. Download an old version of Istioctl
-# curl -L  https://github.com/Homebrew/homebrew-core/blob/a90fede8e446d471222115240a324b856148757e/Formula/istioctl.rb
-# brew install --HEAD -s istioctl.rb
-curl -LO https://storage.googleapis.com/gke-release/asm/istio-1.10.2-asm.2-linux-amd64.tar.gz
-tar xvf istio-1.10.2-asm.2-linux-amd64.tar.gz
-mv istio-1.10.2-asm.2/bin/istioctl /usr/local/bin
-
-# 3. Install the Istio
+# 2. Install the Istio
 istioctl manifest apply --set profile=default
 
-# 4. Lable the Namespace with Injection
+# 3. Lable the Namespace with Injection
 kubectl label namespace default istio-injection=enabled
+```
+
+## Build the WASM code
+```
+tinygo build -o plugin.wasm -scheduler=none -target=wasi main.go
+
+docker build . -t envoy:wasm
 ```
