@@ -196,4 +196,24 @@ Proxy-Wasm plugin in-VM backtrace:
   8:  0x451f - _ZN4core6result19Result$LT$T$C$E$GT$6expect17hd84817813fccb93fE
   9:  0x47da - _ZN6plugin7connect17h80f53ab29bcaeccbE
 ```
-The reason behind that is proxy-wasm has specification of the low-level Application Binary Interface (ABI)
+The reason behind that is proxy-wasm doesn't support the underlying packages in Rust redis.
+
+Similarly, writing a redis client from scratch by using Rust TCP connection support is not feasible either
+```
+# Kill the envoy
+cd ../wasm-rust-filter-redis-tcp
+
+cargo build --target=wasm32-unknown-unknown --release
+
+cd ..
+
+docker run --rm -it \
+           -v $(pwd)/local-envoy-config.yaml:/tmp/local-envoy-config.yaml \
+           -v $(pwd)/wasm-rust-filter-redis-tcp/target/wasm32-unknown-unknown/release/plugin.wasm:/tmp/plugin.wasm \
+           -p 8000:8000 -t envoy:wasm -c /tmp/local-envoy-config.yaml
+```
+
+You will see a similar error when executing `curl 127.0.0.1:8000/hello`
+```
+[2022-07-20 22:15:38.156][51][critical][wasm] [external/envoy/source/extensions/common/wasm/context.cc:1227] wasm log: panicked at 'called `Result::unwrap()` on an `Err` value: Error { kind: Unsupported, message: "operation not supported on this platform" }', src/lib.rs:65:67
+```
