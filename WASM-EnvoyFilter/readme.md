@@ -37,7 +37,48 @@ kubectl label namespace default istio-injection=enabled
 
 ## Build the WASM code
 ```
-tinygo build -o plugin.wasm -scheduler=none -target=wasi main.go
+# Set environment variables get from
+tinygo env
 
-docker build . -t envoy:wasm
+# Download pkg
+cd wasm.tinygo
+go mod edit -require=github.com/tetratelabs/proxy-wasm-go-sdk@main
+go mod download github.com/tetratelabs/proxy-wasm-go-sdk
+
+# Build go binary
+tinygo build -o plugin.wasm -scheduler=none -target=wasi main.go
+```
+
+## Test with local envoy
+```
+# Go to root of `WASM-ENVOYFILTER`
+cd ..
+
+docker run --rm -it \
+           -v $(pwd)/local-envoy-config.yaml:/tmp/local-envoy-config.yaml \
+           -v $(pwd)/wasm-tinygo/plugin.wasm:/tmp/plugin.wasm \
+           -p 8000:8000 -t envoy:wasm -c /tmp/local-envoy-config.yaml
+```
+
+## WASM-Rust
+```
+# install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# install wasm-pack
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+# install packages
+rustup toolchain install nightly
+rustup target add wasm32-unknown-unknown
+
+# for linux you probably need to do this as well
+sudo apt-get update
+sudo apt install build-essential
+
+# Build the Rust wasm filter
+sudo apt-get update
+sudo apt install build-essential
+
+cargo build --target=wasm32-unknown-unknown --release
 ```
