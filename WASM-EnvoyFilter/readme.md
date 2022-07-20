@@ -135,3 +135,48 @@ docker run --rm -it \
            -v $(pwd)/wasm-rust-filter/target/wasm32-unknown-unknown/release/plugin.wasm:/tmp/plugin.wasm \
            -p 8000:8000 -t envoy:wasm -c /tmp/local-envoy-config.yaml
 ```
+
+Open another terminal session
+```
+curl 127.0.0.1:8000/hello
+```
+
+You should see the output as
+```
+Hello, World!
+```
+This is what we configured inside our Rust code.
+
+### Rust with connecting to Redis
+This section is just demonstrate that proxy-wasm does not support the TCP connection package even the compiler can compile the plugin well.
+
+```
+# Kill the running envoy first
+cd ../wasm-rust-filter-redis
+
+cargo build --target=wasm32-unknown-unknown --release
+```
+Ignore the warning message as the code itself is just for demoing purpose
+
+In this version of Rust code, we add the redis client to let the plugin try to connect with the redis.
+
+Let's start a redis in container
+```
+docker run --rm --name redis -p 6379:6379 -d redis
+```
+
+Then deploy the new Rust plugin in Envoy
+```
+# make sure you will be under WASM-EnvoyFilter directory after executing this
+cd ..
+
+docker run --rm -it \
+           -v $(pwd)/local-envoy-config.yaml:/tmp/local-envoy-config.yaml \
+           -v $(pwd)/wasm-rust-filter-redis/target/wasm32-unknown-unknown/release/plugin.wasm:/tmp/plugin.wasm \
+           -p 8000:8000 -t envoy:wasm -c /tmp/local-envoy-config.yaml
+```
+
+Open another terminal session and execute
+```
+curl 127.0.0.1:8000/hello
+```
