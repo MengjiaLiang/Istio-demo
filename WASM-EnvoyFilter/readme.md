@@ -86,7 +86,7 @@ On my side, the logs are like
 [2022-07-20 21:00:08.830][42][info][wasm] [external/envoy/source/extensions/common/wasm/context.cc:1218] wasm log: response header <-- x-envoy-upstream-service-time: 344
 ```
 
-## TinyGo with connecting to Redis
+### TinyGo with connecting to Redis
 This section is just demonstrate that TinyGo is a trimmed version of Golang, that compiler doesn't not support net package.
 
 ```
@@ -102,3 +102,36 @@ You should see the errors like
 This is because go-redis uses net package in the bottom layer, which is not supported in TinyGo.
 
 Writing a Redis client from scratch using [TinyNet](https://github.com/alphahorizonio/tinynet) is not feasible either due to [unisockets](https://github.com/alphahorizonio/unisockets) is not compatible to wasi based TinyGo compiler. 
+
+## Rust
+Install Rust
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install WASM dependencies
+rustup toolchain install nightly
+rustup target add wasm32-unknown-unknown
+
+# For linux you probably need to do this as well
+sudo apt-get update
+sudo apt install build-essential
+```
+
+Build WASM plugin
+```
+cd ../wasm-rust-filter
+cargo build --target=wasm32-unknown-unknown --release
+```
+
+There will be a wasm binary generated under `wasm-rust-filter/target/wasm32-unknown-unknown/release/plugin.wasm`
+
+Let's deploy it in the Envoy
+```
+# make sure you will be under WASM-EnvoyFilter directory after executing this
+cd ..
+
+docker run --rm -it \
+           -v $(pwd)/local-envoy-config.yaml:/tmp/local-envoy-config.yaml \
+           -v $(pwd)/wasm-rust-filter/target/wasm32-unknown-unknown/release/plugin.wasm:/tmp/plugin.wasm \
+           -p 8000:8000 -t envoy:wasm -c /tmp/local-envoy-config.yaml
+```

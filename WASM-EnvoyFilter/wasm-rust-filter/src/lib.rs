@@ -33,8 +33,6 @@ impl HttpContext for HttpHeaders {
             trace!("#{} -> {}: {}", self.context_id, name, value);
         }
 
-        basics();
-
         match self.get_http_request_header(":path") {
             Some(path) if path == "/hello" => {
                 self.send_http_response(
@@ -58,33 +56,4 @@ impl HttpContext for HttpHeaders {
     fn on_log(&mut self) {
         trace!("#{} completed.", self.context_id);
     }
-}
-
-fn connect() -> redis::Connection {
-    //format - host:port
-    let redis_host_name = "host.docker.internal:6379";
-    let redis_password = "";
-
-    let redis_conn_url = format!("{}://:{}@{}", "redis", redis_password, redis_host_name);
-    //println!("{}", redis_conn_url);
-
-    redis::Client::open(redis_conn_url)
-        .expect("Invalid connection URL")
-        .get_connection()
-        .expect("failed to connect to Redis")
-}
-
-fn basics() {
-    let mut conn = connect();
-
-    let _: () = redis::cmd("SET")
-        .arg("foo")
-        .arg("bar")
-        .query(&mut conn)
-        .expect("failed to execute SET for 'foo'");
-
-    let bar: String = redis::cmd("GET")
-        .arg("foo")
-        .query(&mut conn)
-        .expect("failed to execute GET for 'foo'");
 }

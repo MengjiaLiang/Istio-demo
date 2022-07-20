@@ -1,0 +1,1 @@
+/Users/mengjia.liang/Documents/github.com/Sophichia/Istio-demo/wasm-rust-filter/target/wasm32-unknown-unknown/release/plugin.wasm: /Users/mengjia.liang/Documents/github.com/Sophichia/Istio-demo/wasm-rust-filter/src/lib.rs
