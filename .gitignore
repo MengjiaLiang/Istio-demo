@@ -1,4 +1,4 @@
 **/.idea/*
 
-./WASM-EnvoyFilter/wasm-tinygo/.idea/*
-./wasm-rust-filter/target/*
+**/WASM-EnvoyFilter/wasm-tinygo/.idea/*
+**/wasm-rust-filter/target
