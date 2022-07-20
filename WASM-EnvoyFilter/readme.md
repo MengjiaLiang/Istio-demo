@@ -77,8 +77,12 @@ sudo apt-get update
 sudo apt install build-essential
 
 # Build the Rust wasm filter
-sudo apt-get update
-sudo apt install build-essential
-
 cargo build --target=wasm32-unknown-unknown --release
+
+docker build . -t envoy:wasm
+
+docker run --rm -it \
+           -v $(pwd)/local-envoy-config.yaml:/tmp/local-envoy-config.yaml \
+           -v /Users/mengjia.liang/Documents/github.com/Sophichia/Istio-demo/wasm-rust-filter/target/wasm32-unknown-unknown/release/plugin.wasm:/tmp/plugin.wasm \
+           -p 8000:8000 -t envoy:wasm -c /tmp/local-envoy-config.yaml
 ```
