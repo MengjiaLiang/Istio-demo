@@ -180,3 +180,20 @@ Open another terminal session and execute
 ```
 curl 127.0.0.1:8000/hello
 ```
+In your envoy session, you will see the error logs dumping out like
+```
+[2022-07-20 22:00:37.928][36][critical][wasm] [external/envoy/source/extensions/common/wasm/context.cc:1227] wasm log: panicked at 'failed to connect to Redis: operation not supported on this platform', src/lib.rs:74:10
+[2022-07-20 22:00:37.928][36][error][wasm] [external/envoy/source/extensions/common/wasm/wasm_vm.cc:39] Function: proxy_on_request_headers failed: Uncaught RuntimeError: unreachable
+Proxy-Wasm plugin in-VM backtrace:
+  0:  0x3015a - __rust_start_panic
+  1:  0x300d6 - rust_panic
+  2:  0x300a6 - _ZN3std9panicking20rust_panic_with_hook17h1c368a27f9b0afe1E
+  3:  0x2f69a - _ZN3std9panicking19begin_panic_handler28_$u7b$$u7b$closure$u7d$$u7d$17h8e1f8b682ca33009E
+  4:  0x2f5d9 - _ZN3std10sys_common9backtrace26__rust_end_short_backtrace17h7f7da41799766719E
+  5:  0x2fd18 - rust_begin_unwind
+  6:  0x317ea - _ZN4core9panicking9panic_fmt17hcdb13a4b2416cf82E
+  7:  0x338f6 - _ZN4core6result13unwrap_failed17he825aa6f43b16604E
+  8:  0x451f - _ZN4core6result19Result$LT$T$C$E$GT$6expect17hd84817813fccb93fE
+  9:  0x47da - _ZN6plugin7connect17h80f53ab29bcaeccbE
+```
+The reason behind that is proxy-wasm has specification of the low-level Application Binary Interface (ABI)

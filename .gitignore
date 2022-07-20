@@ -1,6 +1,5 @@
 **/.idea/*
 
 **/WASM-EnvoyFilter/wasm-tinygo/.idea/*
-**/wasm-rust-filter/target
-**/wasm-rust-filter-redis/target
+**/**/target
 **/ingress-gateway/certs/
