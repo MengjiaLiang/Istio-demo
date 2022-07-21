@@ -3,3 +3,4 @@
 **/WASM-EnvoyFilter/wasm-tinygo/.idea/*
 **/**/target
 **/ingress-gateway/certs/
+.DS_Store
