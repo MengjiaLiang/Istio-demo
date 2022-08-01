@@ -4,3 +4,4 @@
 **/**/target
 **/ingress-gateway/certs/
 .DS_Store
+**/*.wasm
