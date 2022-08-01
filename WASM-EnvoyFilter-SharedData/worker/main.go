@@ -78,23 +78,25 @@ func (ctx *httpContext) OnHttpRequestHeaders(int, bool) types.Action {
 	// TODO: implement current routing logic here
 
 	// TODO: extract Org name and Tenant name
-	org1 := "notexist"
+	org1 := "org1"
 	value1 := "helloworg1"
-	org2 := "exist"
+	org2 := "org2"
 	_, _, err := proxywasm.GetSharedData("o_" + org1)
 	if err != nil {
 		// Cache miss
 		proxywasm.LogInfo(fmt.Sprintf("cache miss for org %s", org1))
 		proxywasm.SetSharedData("o_"+org1, []byte(value1), 0)
 		proxywasm.LogInfo("set org1 in shared data")
+	} else {
+		proxywasm.LogInfo(fmt.Sprintf("cache hit for org %s", org1))
 	}
 
 	orgId, _, err := proxywasm.GetSharedData("o_" + org2)
 	if err != nil {
 		// Cache miss
-		proxywasm.LogInfo(fmt.Sprintf("cache miss for org %s", org1))
+		proxywasm.LogInfo(fmt.Sprintf("cache miss for org %s", org2))
 	} else {
-		proxywasm.LogInfo(fmt.Sprintf("cache hit for org %s", org1))
+		proxywasm.LogInfo(fmt.Sprintf("cache hit for org %s", org2))
 	}
 
 	// TODO: actually format the IDs
