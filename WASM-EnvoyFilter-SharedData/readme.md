@@ -57,5 +57,5 @@ kubectl delete cm -n istio-system singleton-filter --ignore-not-found
 kubectl create cm -n istio-system singleton-filter --from-file=./singleton.wasm
 
 # Mount the wasm binaries in ingress controller
-kubectl patch deployment -n istio-system istio-ingressgateway --patch-file patch.yaml
+kubectl patch deployment -n istio-system istio-ingressgateway --type='json' --patch-file patch.json
 ```

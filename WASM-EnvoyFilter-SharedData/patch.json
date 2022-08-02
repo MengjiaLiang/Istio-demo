@@ -1,0 +1,40 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/template/spec/volumes/-",
+    "value": {
+      "name": "worker-wasm",
+      "configMap": {
+        "name": "worker-filter"
+      }
+    }
+  },
+  {
+    "op": "add",
+    "path": "/spec/template/spec/volumes/-",
+    "value": {
+      "name": "singleton-wasm",
+      "configMap": {
+        "name": "singleton-filter"
+      }
+    }
+  },
+  {
+    "op": "add",
+    "path": "/spec/template/spec/containers/0/volumeMounts/-",
+    "value": {
+      "mountPath": "/var/local/wasmfilters/worker.wasm",
+      "subPath": "worker.wasm",
+      "name": "worker-wasm"
+    }
+  },
+  {
+    "op": "add",
+    "path": "/spec/template/spec/containers/0/volumeMounts/-",
+    "value": {
+      "mountPath": "/var/local/wasmfilters/singleton.wasm",
+      "subPath": "singleton.wasm",
+      "name": "singleton-wasm"
+    }
+  }
+]
