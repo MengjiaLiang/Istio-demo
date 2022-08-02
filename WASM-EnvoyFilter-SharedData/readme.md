@@ -46,9 +46,16 @@ kubectl apply -f ../ingress-gateway/istio-resources/ingress-gateway/virtualservi
 curl 127.0.0.1/echo/
 
 
-# build a docker image with wasm binaries
+# build the wasm binaries
 tinygo build -o worker.wasm -scheduler=none -target=wasi worker/main.go
 tinygo build -o singleton.wasm -scheduler=none -target=wasi singleton/main.go
-docker build . -t mengjiauipath/istio-proxy:wasm
-docker push mengjiauipath/istio-proxy:wasm
+
+kubectl delete cm -n istio-system worker-filter --ignore-not-found
+kubectl create cm -n istio-system worker-filter --from-file=./worker.wasm
+
+kubectl delete cm -n istio-system singleton-filter --ignore-not-found
+kubectl create cm -n istio-system singleton-filter --from-file=./singleton.wasm
+
+# Mount the wasm binaries in ingress controller
+kubectl patch deployment -n istio-system istio-ingressgateway --patch-file patch.yaml
 ```
