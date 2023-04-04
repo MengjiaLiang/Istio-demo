@@ -1,0 +1,80 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: test-policy
+  namespace: istio-system
+spec:
+  workloadSelector:
+    labels:
+      istio: ingressgateway
+  configPatches:
+    # The first patch adds the lua filter to the listener/http connection manager
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+            subFilter:
+              name: "envoy.filters.http.router"
+    patch:
+      operation: INSERT_BEFORE
+      value: # lua filter specification
+       name: envoy.config.filter.network.custom_protocol
+       typed_config:
+         "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+         inlineCode: |
+            local json_parser = require ("var.lib.istio.lua.json_parser")
+            function get_location(request_handle, org, tenant, service_type)
+              local base_path = "/api/requestrouting/location/"
+              local path = "/api/requestrouting/location/mjorg/portal"
+              request_handle:logInfo("Location Service call path: "..path)
+
+              local location_response_headers, location_response_body = request_handle:httpCall(
+              "outbound|80||platform-location-service.uipath.svc.cluster.local",
+              {
+                  [":method"] = "GET",
+                  [":path"] = path,
+                  [":authority"] = "ingressgateway"
+              },
+              "",
+              5000)
+
+              local location_response_code = tonumber(location_response_headers[":status"])
+              request_handle:logInfo("Location response status: "..location_response_code)
+              request_handle:logInfo("Location response body: "..location_response_body)
+
+              if location_response_code ~= 200 then
+                  local error_message = "Location request failed with status code: "..location_response_code..", response body: "..location_response_body
+                  request_handle:logErr(error_message)
+
+                  local error_redirect_path = "/portal_"
+                  if location_response_code == 404 then
+                      error_redirect_path = error_redirect_path.."/unregistered?serviceType="..service_type.."&organizationName="..org
+                      if tenant ~= nil then
+                          error_redirect_path = error_redirect_path.."&tenantName="..tenant
+                      end
+                  else
+                      -- Redirect to an error page with messages in contract with FE [OR-44416]
+                      error_redirect_path = error_redirect_path.."/genericerror?errorCode=9003"
+                  end
+
+                  request_handler.redirect_request(request_handle, error_redirect_path)
+                  return
+              end
+
+              local location_response_dto = json_parser.parse_json(location_response_body)
+
+              local organization_id = location_response_dto.organizationId
+              local organization_name_in_location = location_response_dto.organizationName
+              local tenant_id = location_response_dto.tenantId
+              local tenant_name_in_location = location_response_dto.tenantName
+
+              return organization_id, organization_name_in_location, tenant_id, tenant_name_in_location
+            end
+
+            function envoy_on_request(request_handle)
+                organization_id, organization_name_in_location, tenant_id, tenant_name_in_location = get_location(request_handle, "mjorg", "", "portal")
+                request_handle:headers():replace("X-UiPath-AccountId", organization_id)
+            end

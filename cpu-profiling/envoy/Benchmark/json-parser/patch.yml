@@ -1,0 +1,13 @@
+- op: add
+  path: "/spec/template/spec/containers/0/volumeMounts/-"
+  value:
+    mountPath: "/var/lib/istio/lua"
+    name: "envoy-lua-lib"
+    readOnly: true
+- op: add
+  path: "/spec/template/spec/volumes/-"
+  value: 
+    configMap:
+      name: envoy-lua-lib
+      defaultMode: 420
+    name: envoy-lua-lib

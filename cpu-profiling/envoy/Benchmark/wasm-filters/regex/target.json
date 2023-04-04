@@ -1,0 +1,6 @@
+{
+    "inherits": [ "wasi" ],
+    "ldflags": [
+        "--max-memory=524288000"
+    ]
+}

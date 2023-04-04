@@ -1,0 +1,63 @@
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: default-vs
+spec:
+  hosts:
+    - '127.0.0.1'
+  gateways:
+    - istio-system/main-gateway
+  http:
+    - match:
+        - uri:
+            prefix: ''
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            port:
+              number: 80
+            host: echo-server-service
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            port:
+              number: 80
+            host: echo-server-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-server
+  labels:
+    app: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+        version: v1
+    spec:
+      containers:
+        - name: echo-server
+          image: ealen/echo-server:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-server-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: echo

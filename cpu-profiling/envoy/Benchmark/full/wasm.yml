@@ -1,0 +1,40 @@
+apiVersion: extensions.istio.io/v1alpha1
+kind: WasmPlugin
+metadata:
+  name: uipath-routing-wasm-policy
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      istio: ingressgateway
+  url: sfbrdevhelmweacr.azurecr.io/wasm-plugin:0.27.0-nottinygc-v1
+  imagePullPolicy: IfNotPresent
+  pluginConfig:
+    cache_ttl: 3600
+    fqdn: "test.local"
+    alt_fqdn: ""
+    ai_center_policy_enable: false
+    active_active: "false"
+    forward_target: ""
+    forward_services:
+      - name: automationhub
+        paths:
+        - ""
+      - name: automationstore
+        paths:
+        - ""
+      - name: insights
+        paths:
+        - ""
+      - name: taskmining
+        paths:
+        - ""
+      - name: roboticsops
+        paths:
+        - ""
+      - name: processmining
+        paths:
+        - ""
+      - name: serverlesscontrolplane
+        paths:
+        - ""

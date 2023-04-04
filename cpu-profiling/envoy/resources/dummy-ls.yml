@@ -1,0 +1,44 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform-location-service
+  namespace: uipath
+  labels:
+    app: location-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: location-service
+  template:
+    metadata:
+      labels:
+        app: location-service
+        version: v1
+    spec:
+      containers:
+        - name: location-service
+          image: mengjiauipath/dummy-location:v1
+          volumeMounts:
+            - mountPath: /service-metadata
+              name: standard-url-status-volume
+              readOnly: true
+      volumes:
+        - name: standard-url-status-volume
+          configMap:
+            name: service-standard-url-status
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform-location-service
+  namespace: uipath
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: location-service
