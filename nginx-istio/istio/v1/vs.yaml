@@ -1,0 +1,20 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: echo-vs
+spec:
+  hosts:
+    - 104.45.186.250
+  gateways:
+    - istio-system/main-gateway
+  http:
+    - match:
+        - uri:
+            prefix: '/echo_'
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            port:
+              number: 80
+            host: echo-service

@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: example-ingress 
+  annotations:
+    nginx.org/mergeable-ingress-type: "master"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "mj-nginx-istio.eastus.cloudapp.azure.com"
+      http:
+        paths:
+          - pathType: Prefix
+            backend:
+              service:
+                name: echo-service
+                port:
+                  number: 80
+            path: "/echo_"
