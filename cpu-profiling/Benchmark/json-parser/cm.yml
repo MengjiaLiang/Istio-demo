@@ -1,0 +1,263 @@
+apiVersion: v1
+data:
+  json_parser.lua: |
+    -- Reference: https://gist.github.com/tylerneylon/59f4bcf316be525b30ab
+
+    local json_parser = {}
+
+    -- Returns pos, did_find; there are two cases:
+    -- 1. Delimiter found: pos = pos after leading space + delim; did_find = true.
+    -- 2. Delimiter not found: pos = pos after leading space;     did_find = false.
+    -- This throws an error if err_if_missing is true and the delim is not found.
+    local function skip_delim(str, pos, delim, err_if_missing)
+        pos = pos + #str:match('^%s*', pos)
+        if str:sub(pos, pos) ~= delim then
+            if err_if_missing then
+                error('Expected ' .. delim .. ' near position ' .. pos)
+            end
+            return pos, false
+        end
+        return pos + 1, true
+    end
+
+    -- Expects the given pos to be the first character after the opening quote.
+    -- Returns val, pos; the returned pos is after the closing quote character.
+    local function parse_str_val(str, pos, val)
+        val = val or ''
+        local early_end_error = 'End of input found while parsing string.'
+        if pos > #str then error(early_end_error) end
+        local c = str:sub(pos, pos)
+        if c == '"'  then return val, pos + 1 end
+        if c ~= '\\' then return parse_str_val(str, pos + 1, val .. c) end
+        -- We must have a \ character.
+        local esc_map = {b = '\b', f = '\f', n = '\n', r = '\r', t = '\t'}
+        local nextc = str:sub(pos + 1, pos + 1)
+        if not nextc then error(early_end_error) end
+        return parse_str_val(str, pos + 2, val .. (esc_map[nextc] or nextc))
+    end
+
+    -- Returns val, pos; the returned pos is after the number's final character.
+    local function parse_num_val(str, pos)
+        local num_str = str:match('^-?%d+%.?%d*[eE]?[+-]?%d*', pos)
+        local val = tonumber(num_str)
+        if not val then error('Error parsing number at position ' .. pos .. '.') end
+        return val, pos + #num_str
+    end
+
+    function json_parser.parse_json(str, pos, end_delim)
+      local json = {}
+        pos = pos or 1
+        if pos > #str then error('Reached unexpected end of input.') end
+        local pos = pos + #str:match('^%s*', pos)  -- Skip whitespace.
+        local first = str:sub(pos, pos)
+        if first == '{' then  -- Parse an object.
+            local obj, key, delim_found = {}, true, true
+            pos = pos + 1
+            while true do
+                key, pos = json_parser.parse_json(str, pos, '}')
+                if key == nil then return obj, pos end
+                if not delim_found then error('Comma missing between object items.') end
+                pos = skip_delim(str, pos, ':', true)  -- true -> error if missing.
+                obj[key], pos = json_parser.parse_json(str, pos)
+                pos, delim_found = skip_delim(str, pos, ',')
+            end
+        elseif first == '[' then  -- Parse an array.
+            local arr, val, delim_found = {}, true, true
+            pos = pos + 1
+            while true do
+                val, pos = json_parser.parse_json(str, pos, ']')
+                if val == nil then return arr, pos end
+                if not delim_found then error('Comma missing between array items.') end
+                arr[#arr + 1] = val
+                pos, delim_found = skip_delim(str, pos, ',')
+            end
+        elseif first == '"' then  -- Parse a string.
+            return parse_str_val(str, pos + 1)
+        elseif first == '-' or first:match('%d') then  -- Parse a number.
+            return parse_num_val(str, pos)
+        elseif first == end_delim then  -- End of an object or array.
+            return nil, pos + 1
+        else  -- Parse true, false, or null.
+            local literals = {['true'] = true, ['false'] = false, ['null'] = {}}
+            for lit_str, lit_val in pairs(literals) do
+              local lit_end = pos + #lit_str - 1
+              if str:sub(pos, lit_end) == lit_str then return lit_val, lit_end + 1 end
+            end
+            local pos_info_str = 'position ' .. pos .. ': ' .. str:sub(pos, pos + 10)
+            error('Invalid json syntax starting at ' .. pos_info_str)
+        end
+    end
+
+    return json_parser
+  location_service_handler.lua: "local location_service_handler = {}\n\nlocal json_parser
+    = require (\"var.lib.istio.lua.json_parser\")\nlocal request_handler = require
+    (\"var.lib.istio.lua.request_handler\")\n\n-- Call Location Service to get org
+    and/or tenant location\nfunction location_service_handler.get_location(request_handle,
+    org, tenant, service_type)\n    local base_path = \"/api/requestrouting/location/\"\n
+    \   local path = base_path..org..\"/\"..service_type\n    if tenant ~= nil then\n
+    \       path = base_path..org..\"/\"..tenant..\"/\"..service_type\n    end\n    request_handle:logInfo(\"Location
+    Service call path: \"..path)\n\n    local location_response_headers, location_response_body
+    = request_handle:httpCall(\n    \"outbound|80||platform-location-service.uipath.svc.cluster.local\",\n
+    \   {\n        [\":method\"] = \"GET\",\n        [\":path\"] = path,\n        [\":authority\"]
+    = \"ingressgateway\"\n    },\n    \"\",\n    5000)\n\n    local location_response_code
+    = tonumber(location_response_headers[\":status\"])\n    request_handle:logInfo(\"Location
+    response status: \"..location_response_code)\n    request_handle:logInfo(\"Location
+    response body: \"..location_response_body)\n\n    if location_response_code ~=
+    200 then\n        local error_message = \"Location request failed with status
+    code: \"..location_response_code..\", response body: \"..location_response_body\n
+    \       request_handle:logErr(error_message)\n        \n        local error_redirect_path
+    = \"/portal_\"\n        if location_response_code == 404 then\n            error_redirect_path
+    = error_redirect_path..\"/unregistered?serviceType=\"..service_type..\"&organizationName=\"..org\n
+    \           if tenant ~= nil then\n                error_redirect_path = error_redirect_path..\"&tenantName=\"..tenant\n
+    \           end\n        else\n            -- Redirect to an error page with messages
+    in contract with FE [OR-44416]\n            error_redirect_path = error_redirect_path..\"/genericerror?errorCode=9003\"\n
+    \       end\n\n        request_handler.redirect_request(request_handle, error_redirect_path)\n
+    \       return\n    end\n\n    local location_response_dto = json_parser.parse_json(location_response_body)\n\n
+    \   local organization_id = location_response_dto.organizationId\n    local organization_name_in_location
+    = location_response_dto.organizationName\n    local tenant_id = location_response_dto.tenantId\n
+    \   local tenant_name_in_location = location_response_dto.tenantName\n\n    return
+    organization_id, organization_name_in_location, tenant_id, tenant_name_in_location\nend\n\n--
+    Get standardUrlEnabled from Servicedefinition\nfunction location_service_handler.check_standard_url(request_handle,
+    service_type)\n    local base_path = \"/api/serviceregistry/servicedefinition/\"\n
+    \   local path = base_path..service_type\n    request_handle:logInfo(\"ServiceDefinition
+    call path: \"..path)\n\n    local service_definition_response_headers, service_definition_response_body
+    = request_handle:httpCall(\n    \"outbound|80||platform-location-service.uipath.svc.cluster.local\",\n
+    \   {\n        [\":method\"] = \"GET\",\n        [\":path\"] = path,\n        [\":authority\"]
+    = \"ingressgateway\"\n    },\n    \"\",\n    5000)\n\n    local service_definition_response_code
+    = tonumber(service_definition_response_headers[\":status\"])\n    request_handle:logInfo(\"ServiceDefinition
+    response status: \"..service_definition_response_code)\n    request_handle:logInfo(\"ServiceDefinition
+    response body: \"..service_definition_response_body)\n\n    if service_definition_response_code
+    ~= 200 then\n        local error_message = \"ServiceDefinition request failed
+    with status code: \"..service_definition_response_code..\", response body: \"..service_definition_response_body\n
+    \       request_handle:logErr(error_message)\n\n        -- Redirect to an error
+    page with messages in contract with FE [OR-44416]\n        local error_redirect_path
+    = \"/portal_/genericerror?errorCode=\"\n        if service_definition_response_code
+    == 404 then\n            error_redirect_path = error_redirect_path..\"9001\"\n
+    \       else\n            error_redirect_path = error_redirect_path..\"9002\"\n
+    \       end\n\n        request_handler.redirect_request(request_handle, error_redirect_path)\n
+    \       return\n    end\n\n    local service_definition_response_dto = json_parser.parse_json(service_definition_response_body)\n\n
+    \   local service_metadata = service_definition_response_dto.serviceMetadata\n
+    \   local is_standard_url_enabled = service_metadata.standardUrlEnabled\n\n    return
+    is_standard_url_enabled\nend\n\nreturn location_service_handler\n"
+  request_handler.lua: "local request_handler = {}\n\n-- Allow only known hosts to
+    be routed to first party services.\nlocal function isSubdomainOf(fqdn, fqdn_from_request)\n
+    \   local fqdn = string.lower(fqdn)\n    local fqdn_from_request = string.lower(fqdn_from_request)\n
+    \   return (((fqdn ~= nil) and ((fqdn_from_request:sub(-#fqdn)) == fqdn) and (#fqdn_from_request
+    > #fqdn)))\nend\n\n-- Skip first party request filter for non-uipath services
+    like rancher, docker-registry, argocd\nfunction request_handler.is_non_uipath_service_host(fqdn,
+    alt_fqdn, fqdn_from_request)\n    return isSubdomainOf(fqdn, fqdn_from_request)
+    or\n           isSubdomainOf(alt_fqdn, fqdn_from_request)\nend\n\n-- Skip the
+    reserved paths in the Envoy Filter\n-- Currently, only skip stand alone AI center's
+    reserved path\nfunction request_handler.is_envoy_filter_bypass_path(path)\n    local
+    path_prefixes = {\n        \"/ai-app\",\n        \"/ai-appmanager\",\n        \"/ai-deployer\",\n
+    \       \"/ai-helper\",\n        \"/ai-pkgmanager\",\n        \"/ai-trainer\"\n
+    \   }\n\n    for _, value in ipairs(path_prefixes)\n    do\n        if (string.sub(path,
+    1, string.len(value)) == value) then\n            return true\n        end\n    end\n\n
+    \   return false\nend\n\n-- Redirect request to a given path\nfunction request_handler.redirect_request(request_handle,
+    redirect_path)\n    request_handle:logErr(\"Redirecting to \".. redirect_path)\n
+    \   request_handle:respond(\n        {\n            [\":status\"] = \"302\",\n
+    \           [\"Location\"] = redirect_path\n        },\n        \"302 Moved Temporarily\"\n
+    \   )\nend\n\n-- Determines whether a request should be forwarded to the primary
+    cluster from the secondary\nfunction request_handler.should_forward_to_primary(service,
+    full_path, sub_path, forwarded_paths)\n  -- Non standard URL: service is empty
+    and needs to be parsed from the path\n  if service == nil then\n    local path_prefix_index
+    = string.find(full_path, \"_\")\n    if path_prefix_index == nil then\n      return
+    false\n    end\n    -- Path is /<service>_/<sub_path>\n    service = string.sub(full_path,
+    2, path_prefix_index-1)\n  end\n\n  paths = forwarded_paths[string.lower(service)]\n
+    \ if paths == nil then\n    return false\n  end\n\n  for _, prefix in ipairs(paths)\n
+    \ do\n    if string.sub(sub_path, 1, string.len(prefix)) == prefix then\n      return
+    true\n    end\n  end\n  return false\nend\n\n-- Match and extract parameters from
+    standard request path\n-- Including org name or guid, and/or tenant name or guid,
+    and service_type, and/or additional path segment\n-- Reference: https://www.lua.org/manual/5.3/manual.html#6.4.1\n--
+    %a: represents all letters, A-Z, a-z\n-- %w: represents all alphanumeric characters,
+    A-Z, a-z, 0-9\n-- Note that there should not be any underscore at the end of org
+    or tenant name\n-- Tenant level regex is trying to match /{org}/{tenant}/{}_/\n--
+    Org level regex is trying to match /{org}/{}_/\nfunction request_handler.extract_standard_params(request_handle,
+    path)\n    local org, tenant, service_type, path_segment = nil, nil, nil, \"\"\n
+    \   local path_segment_index = string.find(path, \"_/\")\n    if path_segment_index
+    == nil then\n        path_segment_index = string.find(path, \"_%?\")\n    end\n
+    \   if path_segment_index ~= nil then\n        path_segment = string.sub(path,
+    path_segment_index+1)\n        request_handle:logInfo(\"Extracted path segment:
+    \"..path_segment)\n        path = string.sub(path, 0, path_segment_index)\n        request_handle:logInfo(\"Extracted
+    path: \"..path)\n    end\n    local tenant_regex = \"^/([%w-_]+[%w])/([%w-_]+[%w])/([%a]+)_$\"\n
+    \   local org_regex = \"^/([%w-_]+[%w])/([%a]+)_$\"\n    org, tenant, service_type
+    = string.match(path, tenant_regex)\n    if org == nil then\n        org, service_type
+    = string.match(path, org_regex)\n        if org == nil then\n            request_handle:logInfo(\"Cannot
+    find organization in the standard request path\")\n            return nil, nil,
+    nil, path_segment\n        else\n            request_handle:logInfo(\"Detect org/serviceType_
+    route: [\"..org..\"/\"..service_type..\"_]\")\n            return org, nil, service_type,
+    path_segment\n        end\n    else\n        request_handle:logInfo(\"Detect org/tenant/serviceType_
+    route: [\"..org..\"/\"..tenant..\"/\"..service_type..\"_]\")\n        return org,
+    tenant, service_type, path_segment\n    end\nend\n\n-- Match and extract parameters
+    from default orchestrator request path\n-- Including org name or guid, and tenant
+    name or guid, and/or additional path segment\n-- Reference: https://www.lua.org/manual/5.3/manual.html#6.4.1\n--
+    %w: represents all alphanumeric characters, A-Z, a-z, 0-9\n-- .: (a dot) represents
+    all characters\n-- Note that there should not be any underscore at the end of
+    org or tenant name\n-- Regex is trying to match /{org}/{tenant}/{} or /{org}/{tenant}\nfunction
+    request_handler.extract_orch_params(request_handle, path)\n    local org, tenant,
+    path_segment = nil, nil, \"\"\n    local regex = \"^/([%w-_]+[%w])/([%w-_]+[%w])/(.*)$\"\n
+    \   org, tenant, path_segment = string.match(path, regex)\n    if path_segment
+    == nil then\n        regex = \"^/([%w-_]+[%w])/([%w-_]+[%w])$\"\n        org,
+    tenant = string.match(path, regex)\n        if org == nil then\n            request_handle:logInfo(\"Cannot
+    find organizaton in the default orchestrator request path\")\n            return
+    nil, nil, nil\n        else\n            request_handle:logInfo(\"Detect org/tenant
+    route: [\"..org..\"/\"..tenant..\"]\")\n            return org, tenant, \"\"\n
+    \       end\n    else\n        request_handle:logInfo(\"Detect org/tenant/segment
+    route: [\"..org..\"/\"..tenant..\"/\"..path_segment..\"]\")\n        return org,
+    tenant, \"/\"..path_segment\n    end\nend\n\n-- Populate org and/or tenant headers\nfunction
+    request_handler.populate_headers(request_handle, organization_id, organization_name_in_location,
+    include_tenant_headers, tenant_id, tenant_name_in_location)\n    request_handle:logInfo(\"Replacing/adding
+    org id to headers: \"..organization_id)\n    request_handle:headers():replace(\"AccountID\",
+    organization_id)\n    request_handle:headers():replace(\"X-UiPath-Internal-AccountId\",
+    organization_id)\n\n    request_handle:logInfo(\"Replacing/adding org name to
+    headers: \"..organization_name_in_location)\n    request_handle:headers():replace(\"X-UiPath-Internal-AccountName\",
+    organization_name_in_location)\n    \n    if include_tenant_headers then\n        request_handle:logInfo(\"Replacing/adding
+    tenant id to headers: \"..tenant_id)\n        request_handle:headers():replace(\"TenantID\",
+    tenant_id)\n        request_handle:headers():replace(\"X-UiPath-Internal-TenantId\",
+    tenant_id)\n\n        request_handle:logInfo(\"Replacing/adding tenant name to
+    headers: \"..tenant_name_in_location)\n        request_handle:headers():replace(\"X-UiPath-Internal-TenantName\",
+    tenant_name_in_location)\n    end\nend\n\n-- Construct outgoing path\nfunction
+    request_handler.construct_outgoing_path(request_handle, is_standard_url_enabled,
+    org, tenant, service_type, path_segment)\n    local forwarding_path = nil\n\n
+    \   if is_standard_url_enabled == false then\n        -- Remove org and tenant
+    name/id and servicetype_ for non-standard url\n        -- Outgoing path: /{path_segment}\n
+    \       forwarding_path = path_segment\n    else\n        -- Outgoing path: /{org}/{servicetype}_/{path_segment}\n
+    \       forwarding_path = \"/\"..org..\"/\"..service_type..\"_\"..path_segment\n\n
+    \       if tenant ~= nil then\n        -- Outgoing path: /{org}/{tenant}/{servicetype}_/{path_segment}\n
+    \       forwarding_path = \"/\"..org..\"/\"..tenant..\"/\"..service_type..\"_\"..path_segment\n
+    \       end\n    end\n\n    request_handle:logInfo(\"Request path is being replaced
+    with: \"..forwarding_path)\n    request_handle:headers():replace(\":path\", forwarding_path)\nend\n\nreturn
+    request_handler\n"
+  string_helper.lua: "local string_helper = {}\n\n-- Parse query parameter value\nlocal
+    function decode_url(s)\n    s = s:gsub('+', ' ')\n        :gsub('%%(%x%x)', function(h)\n
+    \                             return string.char(tonumber(h, 16))\n                        end)\n
+    \   return s\nend\n\n-- Extract query parameters from url to a map\nfunction string_helper.parse_url(s)\n
+    \   local ans = {}\n    for k,v in s:gmatch('([^&=?]-)=([^&=?]+)' ) do\n        ans[
+    k ] = decode_url(v)\n    end\n    return ans\nend\n\n-- Get value from a key:value
+    pair string that separated by space, given its key\nfunction string_helper.get_value(str,
+    key)\n    for element in str:gmatch(\"%S+\") do\n        local index = string.find(string.lower(element),
+    string.lower(key))\n        if index ~= nil then\n            index = string.find(element,
+    \":\")\n            local val = string.sub(element, index+1)\n            return
+    val\n        end\n    end\nend\n\n-- Skip filters when encounter reserved words,
+    return false when white_list words exist in given parameter\nfunction string_helper.skip_reserved_words(request_handle,
+    reserved_list, white_list, param)\n    for i, v in ipairs(white_list) do\n        if
+    string.find(string.lower(param), v)  then\n            return false\n        end\n
+    \   end\n    \n    for i, v in ipairs(reserved_list) do\n        local pos = string.find(string.lower(param),
+    v)\n        local is_reserved = pos ~= nil and (pos - 1 + string.len(v)) == string.len(param)\n
+    \       if is_reserved then\n            request_handle:logInfo(v..\" is found
+    at \"..pos..\", skip request filter...\")\n            return true\n        end\n
+    \   end\n    return false\nend\n\n-- Get port from request, returns default 443
+    if no port specified\nfunction string_helper.get_port(request_handle)\n    local
+    authority = request_handle:headers():get(\":authority\")\n    local port_index
+    = string.find(authority, \":\")\n    if port_index ~= nil then\n        local
+    port = tonumber(string.sub(authority, port_index+1))\n        return port\n    end\n
+    \   return 443\nend\n\n-- Extract fqdn from FQDN:PORT\nfunction string_helper.get_fqdn(request_handle)\n
+    \   local req_authority = string.lower(request_handle:headers():get(\":authority\"))\n
+    \   local port_index = string.find(req_authority, \":\")\n    local fqdn\n\n    if
+    port_index ~= nil then\n        fqdn = tostring(string.sub(req_authority, 0, port_index-1))\n
+    \   else\n        fqdn = req_authority\n    end\n    return fqdn\nend\n\nreturn
+    string_helper\n"
+kind: ConfigMap
+metadata:
+  name: envoy-lua-lib
+  namespace: istio-system
