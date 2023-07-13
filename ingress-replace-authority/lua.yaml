@@ -29,8 +29,10 @@ spec:
                  local host = request_handle:headers():get(":authority")
                  request_handle:logInfo("Original host: "..host)
 
-                 request_handle:headers():replace(":authority", "echo.mj-test.svc.cluster.local")
+                 if host == '127.0.0.1' then
+                    request_handle:headers():replace(":authority", "echo.mj-test.svc.cluster.local")
 
-                 host = request_handle:headers():get(":authority")
-                 request_handle:logInfo("After replacement the host: "..host)
+                    host = request_handle:headers():get(":authority")
+                    request_handle:logInfo("After replacement the host: "..host)
+                 end
              end

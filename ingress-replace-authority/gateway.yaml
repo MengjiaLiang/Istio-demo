@@ -13,3 +13,4 @@ spec:
       protocol: HTTP
     hosts:
     - 'echo.mj-test.svc.cluster.local'
+    - '127.0.0.1'
