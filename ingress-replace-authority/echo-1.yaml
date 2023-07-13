@@ -1,0 +1,37 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-env-var
+  labels:
+    app: echo-env-var
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo-env-var
+  template:
+    metadata:
+      labels:
+        app: echo-env-var
+        version: v1
+    spec:
+      containers:
+      - name: flask-server
+        image: dustise/flaskapp
+        env:
+        - name: echo
+          value: "I am echo in default ns\n"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-env-var-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: echo-env-var

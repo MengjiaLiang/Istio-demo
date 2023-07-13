@@ -1,0 +1,39 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  namespace: mj-test
+  labels:
+    app: echo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+        version: v1
+    spec:
+      containers:
+      - name: flask-server
+        image: dustise/flaskapp
+        env:
+        - name: echo
+          value: "I am echo in mj-test ns\n"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo
+  namespace: mj-test
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: echo

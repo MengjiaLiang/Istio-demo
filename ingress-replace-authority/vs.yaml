@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: echo-vs
+spec:
+  hosts:
+  - 'echo.mj-test.svc.cluster.local'
+  gateways:
+  - istio-system/main-gateway
+  exportTo:
+  - "*"
+  http:
+  - match:
+    - port: 80
+    route:
+    - destination:
+        host: echo.mj-test.svc.cluster.local
